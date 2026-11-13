@@ -1,0 +1,24 @@
+[package]
+name = "rs-music-tui"
+version = "0.1.0"
+edition = "2024"
+authors = ["hanli"]
+description = "a local music player for the terminal"
+license = "MIT"
+keywords = ["rs-music-tui", "tui", "cli", "terminal"]
+categories = ["command-line-utilities"]
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+toml = { version = "1.2.1", default-features = false, features = ["parse", "serde", "std", "display"] }
+clap = "4.6.7"
+clap_complete = "4.6.11"
+crossterm = "0.29.0"
+anyhow = "1.0.104"
+ratatui = { version = "0.30.2", features = ["crossterm_0_29"], default-features = false }
+rodio = { version = "0.23.0", default-features = false, features = ["playback", "flac", "vorbis", "wav", "mp3", "mp4", "symphonia-alac"] }
+
+tempfile = "3.27.0"
