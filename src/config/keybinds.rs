@@ -18,6 +18,8 @@ pub struct KeyBindings {
     pub submit: Key,
     /// 重新扫描当前音乐目录。
     pub reset_play: Key,
+    /// 循环切换自然续播模式。
+    pub cycle_playback_mode: Key,
 }
 impl Default for KeyBindings {
     fn default() -> Self {
@@ -36,6 +38,7 @@ impl Default for KeyBindings {
             search: Key::Char('/'),
             submit: Key::Enter,
             reset_play: Key::Char('r'),
+            cycle_playback_mode: Key::Char('m'),
         }
     }
 }

@@ -86,6 +86,7 @@ impl UserConfig {
         key!(search);
         key!(submit);
         key!(reset_play);
+        key!(cycle_playback_mode);
         macro_rules! color {
             ($name:ident) => {
                 if let Some(value) = config.theme.get(stringify!($name)) {

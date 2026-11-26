@@ -181,9 +181,10 @@ fn draw_playbar(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let block = Block::default()
         .borders(Borders::ALL)
         .title(format!(
-            "{}  音量 {}%  |  顺序播放",
+            "{}  音量 {}%  |  {}",
             state,
-            (app.volume * 100.0).round()
+            (app.volume * 100.0).round(),
+            app.playback_mode.label()
         ))
         .border_style(Style::default().fg(theme.inactive));
     let inner = block.inner(area);
@@ -281,7 +282,10 @@ fn draw_help(frame: &mut Frame<'_>, app: &App) {
         ),
         format!("{}：筛选文件名或目录；Enter 确认；Esc 清除", keys.search),
         format!("{}：重新扫描当前目录", keys.reset_play),
-        "播放完自动下一首，最后一首结束后停止。".into(),
+        format!(
+            "{}：顺序播放 / 列表循环 / 单曲循环",
+            keys.cycle_playback_mode
+        ),
         "手动切歌到达首尾时循环；损坏文件会显示错误。".into(),
         format!(
             "{} / Esc：关闭帮助；{} / Ctrl-C：退出",
@@ -308,6 +312,26 @@ mod tests {
     use super::*;
     use crate::config::user_config::UserConfig;
     use ratatui::{Terminal, backend::TestBackend};
+    #[test]
+    fn playbar_displays_each_playback_mode() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut app = App::new(temp.path().into(), UserConfig::new()).unwrap();
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        for label in ["顺序播放", "列表循环", "单曲循环"] {
+            terminal
+                .draw(|frame| draw_main_layout(frame, &mut app))
+                .unwrap();
+            let buffer = terminal.backend().buffer();
+            let text = (17..23)
+                .flat_map(|y| (0..80).map(move |x| (x, y)))
+                .map(|position| buffer[position].symbol())
+                .collect::<String>();
+            // 宽字符的占位单元格为空格，去除后检查中文模式名称。
+            assert!(text.replace(' ', "").contains(label));
+            app.handle_key(crate::event::Key::Char('m'));
+        }
+    }
+
     #[test]
     fn format_column_fits_a_standard_terminal() {
         let temp = tempfile::tempdir().unwrap();

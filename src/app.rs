@@ -2,7 +2,7 @@ use crate::config::user_config::UserConfig;
 use crate::event::Key;
 use crate::library::{self, Track};
 use crate::player::Player;
-use crate::state::SessionState;
+use crate::state::{PlaybackMode, SessionState};
 use anyhow::Result;
 use ratatui::widgets::TableState;
 use std::path::PathBuf;
@@ -25,6 +25,8 @@ pub struct App {
     /// 首次播放时才初始化音频设备，扫描和列出文件不需要设备。
     pub player: Option<Player>,
     pub volume: f32,
+    /// 控制自然播放结束后的续播行为。
+    pub playback_mode: PlaybackMode,
     pub message: String,
     pub user_config: UserConfig,
 }
@@ -46,6 +48,7 @@ impl App {
             active: false,
             player: None,
             volume: 1.0,
+            playback_mode: PlaybackMode::default(),
             message: String::new(),
             user_config,
         };
@@ -54,9 +57,10 @@ impl App {
         Ok(app)
     }
 
-    /// 恢复曲目定位和音量，不打开音频设备，也不自动开始播放。
+    /// 恢复曲目定位、音量和模式，不打开音频设备，也不自动开始播放。
     pub fn restore(&mut self, state: &SessionState) {
         self.volume = state.volume;
+        self.playback_mode = state.playback_mode;
         self.current = state
             .current_track
             .as_ref()
@@ -72,6 +76,7 @@ impl App {
             music_directory: Some(self.root.clone()),
             current_track: self.current.map(|index| self.tracks[index].path.clone()),
             volume: self.volume,
+            playback_mode: self.playback_mode,
         }
     }
 
@@ -179,18 +184,24 @@ impl App {
         Ok(())
     }
 
-    /// 检查播放结束并自动前进；到达末尾或加载失败时停止自动切歌。
+    // 自然续播使用完整音乐库；空库或失效的当前索引不再续播。
+    fn next_after_finish(&self) -> Option<usize> {
+        let index = self.current.filter(|index| *index < self.tracks.len())?;
+        match self.playback_mode {
+            PlaybackMode::Sequential => (index + 1 < self.tracks.len()).then_some(index + 1),
+            PlaybackMode::RepeatAll => Some((index + 1) % self.tracks.len()),
+            PlaybackMode::RepeatOne => Some(index),
+        }
+    }
+
+    /// 检查播放结束并按模式续播；加载失败时停止，等待用户操作。
     pub fn tick(&mut self) {
         if self.active && self.player.as_ref().map(Player::finished).unwrap_or(false) {
             self.active = false;
             if let Some(player) = &mut self.player {
                 player.stop();
             }
-            if let Some(next) = self
-                .current
-                .map(|index| index + 1)
-                .filter(|index| *index < self.tracks.len())
-            {
+            if let Some(next) = self.next_after_finish() {
                 if let Err(error) = self.play_index(next) {
                     self.message = format!("{:#}", error);
                 }
@@ -274,6 +285,8 @@ impl App {
                 }
             } else if key == keys.reset_play {
                 self.rescan()?;
+            } else if key == keys.cycle_playback_mode {
+                self.playback_mode = self.playback_mode.next();
             } else if key == Key::Down || key == Key::Char('j') {
                 self.move_selection(1);
             } else if key == Key::Up || key == Key::Char('k') {
@@ -299,6 +312,53 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn playback_modes_choose_next_track_and_preserve_manual_navigation() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut app = App::new(temp.path().into(), UserConfig::new()).unwrap();
+        for mode in [
+            PlaybackMode::Sequential,
+            PlaybackMode::RepeatAll,
+            PlaybackMode::RepeatOne,
+        ] {
+            app.playback_mode = mode;
+            assert_eq!(app.next_after_finish(), None);
+        }
+        for name in ["a.wav", "b.wav", "c.wav"] {
+            std::fs::write(temp.path().join(name), b"").unwrap();
+        }
+        app.rescan().unwrap();
+        app.playback_mode = PlaybackMode::Sequential;
+        app.current = Some(1);
+        assert_eq!(app.next_after_finish(), Some(2));
+        app.current = Some(2);
+        assert_eq!(app.next_after_finish(), None);
+        for (mode, next) in [(PlaybackMode::RepeatAll, 0), (PlaybackMode::RepeatOne, 2)] {
+            app.handle_key(Key::Char('m'));
+            assert_eq!(app.playback_mode, mode);
+            assert_eq!(app.next_after_finish(), Some(next));
+            assert_eq!(app.adjacent(false), Some(0));
+            assert_eq!(app.adjacent(true), Some(1));
+        }
+        app.handle_key(Key::Char('m'));
+        assert_eq!(app.playback_mode, PlaybackMode::Sequential);
+        app.handle_key(Key::Char('/'));
+        app.handle_key(Key::Char('m'));
+        assert_eq!(app.query, "m");
+        assert_eq!(app.playback_mode, PlaybackMode::Sequential);
+        app.handle_key(Key::Esc);
+        app.tracks.truncate(1);
+        app.current = Some(0);
+        for (mode, expected) in [
+            (PlaybackMode::Sequential, None),
+            (PlaybackMode::RepeatAll, Some(0)),
+            (PlaybackMode::RepeatOne, Some(0)),
+        ] {
+            app.playback_mode = mode;
+            assert_eq!(app.next_after_finish(), expected);
+        }
+    }
+
     #[test]
     fn navigation_filtering_and_rescan() {
         let temp = tempfile::tempdir().unwrap();
@@ -338,6 +398,7 @@ mod tests {
             music_directory: Some(app.root.clone()),
             current_track: Some(app.tracks[1].path.clone()),
             volume: 0.4,
+            playback_mode: PlaybackMode::RepeatOne,
         };
         app.restore(&saved);
         assert_eq!(app.selected(), Some(1));
