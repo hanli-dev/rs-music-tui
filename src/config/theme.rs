@@ -12,23 +12,30 @@ pub struct Theme {
     pub playbar_progress_text: Color,
     pub playbar_text: Color,
     pub selected: Color,
+    /// 选中行的背景色，与选中文字颜色分别配置。
+    pub selected_background: Color,
+    pub warning: Color,
+    pub error: Color,
     pub text: Color,
     pub header: Color,
 }
 impl Default for Theme {
     fn default() -> Self {
         Self {
-            active: Color::LightBlue,
-            banner: Color::LightCyan,
-            hint: Color::Yellow,
-            inactive: Color::LightYellow,
-            playbar_background: Color::Black,
-            playbar_progress: Color::Green,
-            playbar_progress_text: Color::Yellow,
-            playbar_text: Color::LightYellow,
-            selected: Color::LightBlue,
+            active: Color::Cyan,
+            banner: Color::Cyan,
+            hint: Color::Gray,
+            inactive: Color::DarkGray,
+            playbar_background: Color::DarkGray,
+            playbar_progress: Color::Cyan,
+            playbar_progress_text: Color::White,
+            playbar_text: Color::White,
+            selected: Color::White,
+            selected_background: Color::Cyan,
+            warning: Color::Yellow,
+            error: Color::Red,
             text: Color::White,
-            header: Color::LightBlue,
+            header: Color::Cyan,
         }
     }
 }

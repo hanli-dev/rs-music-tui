@@ -43,6 +43,7 @@ pub fn start_ui(app: &mut App, state_path: PathBuf) -> Result<()> {
             app.tick();
             if let Err(error) = writer.sync(app.session_state(), Instant::now(), false) {
                 app.message = format!("保存状态失败：{error:#}");
+                app.message_level = crate::app::MessageLevel::Error;
             }
             terminal.draw(|frame| draw::draw_main_layout(frame, app))?;
             if event::poll(Duration::from_millis(

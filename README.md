@@ -82,8 +82,15 @@ previous_track = "p"
 cycle_playback_mode = "m"
 
 [theme]
-selected = "LightBlue"
+selected = "White"
+selected_background = "Cyan"
 ```
+
+默认主题使用终端预定义颜色：白色正文、灰色辅助信息、青色焦点与进度、深灰色非活动边框，选中行使用青底白字，具体色值随终端配色方案变化。
+播放中的曲目使用青色粗体；选中该曲目时使用青底白字并保留粗体，暂停时保留播放曲目的强调。
+未播放进度使用深灰色底色，进度时间使用白字并沿用进度条背景，可通过 `playbar_progress_text` 配置文字颜色。
+普通提示使用灰色，警告使用黄色，错误使用红色；正常播放时底部仅显示歌曲名，不重复显示完整路径。
+`selected` 控制选中文字颜色，`selected_background` 控制选中行背景；`warning` 和 `error` 可分别覆盖警告和错误颜色。
 
 ## 播放状态
 

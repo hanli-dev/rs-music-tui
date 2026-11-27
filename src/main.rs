@@ -47,6 +47,7 @@ fn main() -> Result<()> {
     };
     app.restore(&saved);
     for notice in &notices {
+        app.message_level = app::MessageLevel::Warning;
         app.message.push_str("；");
         app.message.push_str(notice);
     }

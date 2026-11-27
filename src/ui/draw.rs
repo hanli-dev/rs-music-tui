@@ -1,9 +1,9 @@
-use crate::app::App;
+use crate::app::{App, MessageLevel};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Clear, Gauge, Paragraph, Row, Table, Wrap};
+use ratatui::widgets::{Block, Borders, Cell, Clear, Gauge, Paragraph, Row, Table, Wrap};
 use std::time::Duration;
 
 /// 绘制搜索、音乐库、歌曲表格和播放条，小窗口显示尺寸提示。
@@ -65,10 +65,19 @@ pub fn draw_main_layout(frame: &mut Frame<'_>, app: &mut App) {
         Line::from(format!("全部歌曲  {}", app.tracks.len())),
         Line::from(format!("当前显示  {}", app.visible.len())),
         Line::from(""),
-        Line::from(app.root.display().to_string()),
+        Line::styled(
+            app.root.display().to_string(),
+            Style::default().fg(theme.hint),
+        ),
         Line::from(""),
-        Line::from(format!("{} 重新扫描", app.user_config.keys.reset_play)),
-        Line::from("MP3 / FLAC / WAV / OGG / M4A"),
+        Line::styled(
+            format!("{} 重新扫描", app.user_config.keys.reset_play),
+            Style::default().fg(theme.hint),
+        ),
+        Line::styled(
+            "MP3 / FLAC / WAV / OGG / M4A",
+            Style::default().fg(theme.hint),
+        ),
     ];
     frame.render_widget(
         Paragraph::new(side)
@@ -88,6 +97,20 @@ pub fn draw_main_layout(frame: &mut Frame<'_>, app: &mut App) {
         .iter()
         .map(|index| {
             let track = &app.tracks[*index];
+            // 播放中的整行统一强调；选中背景和前景由表格最后覆盖，保留粗体。
+            let playing = app.active && app.current == Some(*index);
+            let row_style = if playing {
+                Style::default()
+                    .fg(theme.active)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
+            let detail_style = if playing {
+                row_style
+            } else {
+                Style::default().fg(theme.hint)
+            };
             let marker = if app.current == Some(*index) {
                 "▶"
             } else {
@@ -105,11 +128,12 @@ pub fn draw_main_layout(frame: &mut Frame<'_>, app: &mut App) {
                 .to_string_lossy()
                 .to_uppercase();
             Row::new(vec![
-                marker.to_string(),
-                track.title.clone(),
-                folder,
-                format,
+                Cell::from(marker).style(Style::default().fg(theme.active)),
+                Cell::from(track.title.clone()),
+                Cell::from(folder).style(detail_style),
+                Cell::from(format).style(detail_style),
             ])
+            .style(row_style)
         })
         .collect::<Vec<_>>();
     // 先预留边框、选择标记、间距和固定列宽，防止歌曲格式列被挤出。
@@ -128,14 +152,18 @@ pub fn draw_main_layout(frame: &mut Frame<'_>, app: &mut App) {
         .row_highlight_style(
             Style::default()
                 .fg(theme.selected)
-                .add_modifier(Modifier::BOLD),
+                .bg(theme.selected_background),
         )
         .style(Style::default().fg(theme.text))
         .block(
             Block::default()
                 .borders(Borders::ALL)
                 .title("歌曲列表")
-                .border_style(Style::default().fg(theme.active)),
+                .border_style(Style::default().fg(if app.searching || app.help {
+                    theme.inactive
+                } else {
+                    theme.active
+                })),
         );
     frame.render_stateful_widget(table, body[1], &mut app.table);
     if app.visible.is_empty() {
@@ -180,11 +208,14 @@ fn draw_playbar(frame: &mut Frame<'_>, app: &App, area: Rect) {
         .unwrap_or("选择歌曲后按 Enter 播放");
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(format!(
-            "{}  音量 {}%  |  {}",
-            state,
-            (app.volume * 100.0).round(),
-            app.playback_mode.label()
+        .title(Span::styled(
+            format!(
+                "{}  音量 {}%  |  {}",
+                state,
+                (app.volume * 100.0).round(),
+                app.playback_mode.label()
+            ),
+            Style::default().fg(theme.playbar_text),
         ))
         .border_style(Style::default().fg(theme.inactive));
     let inner = block.inner(area);
@@ -202,7 +233,11 @@ fn draw_playbar(frame: &mut Frame<'_>, app: &App, area: Rect) {
         )
         .split(inner);
     frame.render_widget(
-        Paragraph::new(title).style(Style::default().fg(theme.playbar_text)),
+        Paragraph::new(title).style(
+            Style::default()
+                .fg(theme.playbar_text)
+                .add_modifier(Modifier::BOLD),
+        ),
         rows[0],
     );
     let position = app
@@ -230,12 +265,17 @@ fn draw_playbar(frame: &mut Frame<'_>, app: &App, area: Rect) {
             )
             .label(Span::styled(
                 label,
+                // 只设置文字颜色，让标签沿用所在位置的已播放或未播放背景。
                 Style::default().fg(theme.playbar_progress_text),
             )),
         rows[1],
     );
     frame.render_widget(
-        Paragraph::new(app.message.as_str()).style(Style::default().fg(theme.hint)),
+        Paragraph::new(app.message.as_str()).style(Style::default().fg(match app.message_level {
+            MessageLevel::Info => theme.hint,
+            MessageLevel::Warning => theme.warning,
+            MessageLevel::Error => theme.error,
+        })),
         rows[2],
     );
     let keys = &app.user_config.keys;
@@ -244,7 +284,7 @@ fn draw_playbar(frame: &mut Frame<'_>, app: &App, area: Rect) {
             "↑↓ 选择  {} 播放/暂停  {} 下一首  {} 上一首  {} 退出",
             keys.toggle_playback, keys.next_track, keys.previous_track, keys.back
         ))
-        .style(Style::default().fg(theme.text)),
+        .style(Style::default().fg(theme.hint)),
         rows[3],
     );
 }

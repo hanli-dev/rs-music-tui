@@ -103,6 +103,9 @@ impl UserConfig {
         color!(playbar_progress_text);
         color!(playbar_text);
         color!(selected);
+        color!(selected_background);
+        color!(warning);
+        color!(error);
         color!(text);
         color!(header);
         Ok(())

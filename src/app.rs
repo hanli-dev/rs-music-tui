@@ -7,6 +7,15 @@ use anyhow::Result;
 use ratatui::widgets::TableState;
 use std::path::PathBuf;
 
+/// 提示信息的语义级别，用于区分普通反馈、警告和错误。
+#[derive(Clone, Copy, Default)]
+pub enum MessageLevel {
+    #[default]
+    Info,
+    Warning,
+    Error,
+}
+
 /// 管理音乐库、界面选择和播放状态；界面行号与音乐库索引分开保存。
 pub struct App {
     pub root: PathBuf,
@@ -28,6 +37,7 @@ pub struct App {
     /// 控制自然播放结束后的续播行为。
     pub playback_mode: PlaybackMode,
     pub message: String,
+    pub message_level: MessageLevel,
     pub user_config: UserConfig,
 }
 
@@ -50,6 +60,7 @@ impl App {
             volume: 1.0,
             playback_mode: PlaybackMode::default(),
             message: String::new(),
+            message_level: MessageLevel::Info,
             user_config,
         };
         app.filter();
@@ -81,6 +92,11 @@ impl App {
     }
 
     fn scan_message(&mut self) {
+        self.message_level = if self.warnings.is_empty() {
+            MessageLevel::Info
+        } else {
+            MessageLevel::Warning
+        };
         self.message = if self.warnings.is_empty() {
             format!(
                 "已扫描 {} 首歌曲；Enter 播放，? 查看帮助",
@@ -151,7 +167,9 @@ impl App {
         if let Some(row) = self.visible.iter().position(|item| *item == index) {
             self.table.select(Some(row));
         }
-        self.message = format!("正在播放：{}", track.path.display());
+        // 歌曲名已在播放条显示，成功播放后清除过期提示，避免重复显示完整路径。
+        self.message.clear();
+        self.message_level = MessageLevel::Info;
         Ok(())
     }
 
@@ -204,9 +222,11 @@ impl App {
             if let Some(next) = self.next_after_finish() {
                 if let Err(error) = self.play_index(next) {
                     self.message = format!("{:#}", error);
+                    self.message_level = MessageLevel::Error;
                 }
             } else {
                 self.message = "列表播放完毕；Enter 重新播放，n/p 切歌".into();
+                self.message_level = MessageLevel::Info;
             }
         }
     }
@@ -304,6 +324,7 @@ impl App {
         })();
         if let Err(error) = result {
             self.message = format!("{:#}", error);
+            self.message_level = MessageLevel::Error;
         }
         false
     }
